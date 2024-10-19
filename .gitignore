@@ -1,2 +1,3 @@
 /venv/*
 /audio_watermark/temp_files/*
+/audio_watermark/venv/*

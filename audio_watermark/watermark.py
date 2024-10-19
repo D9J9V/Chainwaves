@@ -1,27 +1,32 @@
 import numpy as np
-from scipy.io import wavfile
-from scipy.fft import fft, ifft
 from scipy.signal import find_peaks, stft, istft
 from scipy.interpolate import interp1d
 import logging
+import librosa
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def mellin_transform(audio, num_scales=100):
+# import soundfile as sf
+
+def mellin_transform(audio, num_scales=100, sample_rate=44100):
     """Aplica una versión simplificada de la Transformada de Mellin."""
     N = len(audio)
-    scales = np.logspace(0, np.log10(N), num_scales)
+    max_freq = min(sample_rate / 2, 22000)
+    scales = np.logspace(np.log10(20), np.log10(max_freq), num_scales)
     mt = np.zeros(num_scales)
     for i, scale in enumerate(scales):
         stretched = interp1d(np.arange(N), audio, bounds_error=False, fill_value=0)(np.arange(N) * scale / N)
         mt[i] = np.sum(np.abs(stretched))
     logger.info(f"Transformada de Mellin aplicada. Rango de valores: [{mt.min():.2f}, {mt.max():.2f}]")
     return mt
-    
+
+
 def extract_mellin_features(audio, n_features=100):
-    """Extrae características usando la Transformada de Mellin."""
+    # """Extrae características usando la Transformada de Mellin."""
     mt = mellin_transform(audio)
+
+    # peaks, _ = find_peaks(mt, distance=20, height=0.1, prominence=0.2)
     peaks, _ = find_peaks(mt, distance=5)
     features = peaks[:n_features]
     logger.info(f"Características de Mellin extraídas. Número de picos: {len(features)}")
@@ -43,10 +48,21 @@ def load_audio(file_path):
     if audio.ndim > 1:
         audio = np.mean(audio, axis=1)
     logger.info(f"Audio cargado. Tasa de muestreo: {sample_rate} Hz, Duración: {len(audio)/sample_rate:.2f} segundos")
+
+    peaks, _ = find_peaks(mt, distance=20, height=0.1, prominence=0.2)
+    return peaks[:n_features]
+
+
+def custom_load_audio(file_path):
+    # """Carga un archivo de audio usando librosa y lo convierte
+    # a mono si es estéreo."""
+    audio, sample_rate = librosa.load(file_path, sr=None, mono=True)
     return sample_rate, audio
+
 
 def save_audio(file_path, sample_rate, audio):
     """Guarda el audio en un archivo WAV."""
+
     wavfile.write(file_path, sample_rate, audio.astype(np.int16))
     logger.info(f"Audio guardado en {file_path}")
 
@@ -64,7 +80,7 @@ def apply_watermark(audio, stft_features, mellin_features, strength=0.1, nperseg
     logger.info(f"Watermark aplicado. Fuerza: {strength},  Características STFT: {len(stft_features)}, Mellin: {len(mellin_features)}")
     return watermarked.astype(audio.dtype)
 
-def detect_watermark(audio, original_stft_features, original_mellin_features, threshold=0.8):
+def detect_watermark(audio, sr, original_stft_features, original_mellin_features, threshold=0.8):
     """Detecta si el audio contiene el watermark."""
     detected_stft = extract_stft_features(audio)
     detected_mellin = extract_mellin_features(audio)
@@ -84,20 +100,23 @@ def detect_watermark(audio, original_stft_features, original_mellin_features, th
 def create_watermark(input_file, output_file):
     """Crea un watermark en el archivo de audio de entrada y lo guarda."""
     sample_rate, audio = load_audio(input_file)
-    stft_features = extract_stft_features(audio)
-    mellin_features = extract_mellin_features(audio)
+
+    stft_features = extract_stft_features(audio, sample_rate)
+    mellin_features = extract_mellin_features(audio, sample_rate)
     
-    watermarked = apply_watermark(audio, stft_features, mellin_features)
-    
+    watermarked = apply_watermark(audio, stft_features, mellin_features, sample_rate)
+
     save_audio(output_file, sample_rate, watermarked)
     logger.info(f"Watermark creado y aplicado.")
     return stft_features, mellin_features
 
 def check_watermark(input_file, original_stft_features, original_mellin_features):
     """Comprueba si el archivo de audio contiene el watermark."""
+    
     _, audio = load_audio(input_file)
-    is_present, similarity = detect_watermark(audio, original_stft_features, original_mellin_features)
+    is_present, similarity = detect_watermark(audio, sample_rate, original_stft_features, original_mellin_features)
     logger.info(f"Verificación de watermark completada. Presente: {is_present}, Similitud: {similarity:.2f}")
+
     return bool(is_present), float(similarity)
 
 if __name__ == "__main__":
@@ -122,3 +141,4 @@ if __name__ == "__main__":
     logger.info("- Audio con patrones repetitivos o ritmos constantes")
     logger.info("- Grabaciones de voz claras y sin mucho ruido de fondo")
     logger.info("- Samples de al menos varios segundos de duración para mayor robustez")
+
