@@ -91,3 +91,30 @@ El MVP implementa un sistema de watermarking de audio basado en transformaciones
    - Optimiza los parámetros (fuerza del watermark, umbral de detección) según tus necesidades.
 
 Este MVP proporciona una base sólida para un sistema de watermarking de audio, con potencial para expandirse en robustez, eficiencia y funcionalidades adicionales.
+---
+Quickstart:
+1. Configuración del entorno:
+
+```bash
+# Crea un entorno virtual (opcional, pero recomendado)
+python -m venv venv
+source venv/bin/activate  # En Windows: venv\Scripts\activate
+
+# Instala las dependencias
+pip install -r requirements.txt
+
+# Inicia el servidor Flask
+python main.py
+```
+
+2. Pruebas manuales con cURL:
+
+Aplicar watermark:
+```bash
+curl -X POST -F "file=@path/to/original_audio.wav" http://localhost:5000/apply_watermark
+```
+
+Verificar watermark:
+```bash
+curl -X POST -F "file=@path/to/suspect_audio.wav" -F "features=1,2,3,4,5" http://localhost:5000/check_watermark
+```
