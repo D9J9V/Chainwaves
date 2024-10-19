@@ -116,5 +116,8 @@ curl -X POST -F "file=@path/to/original_audio.wav" http://localhost:5000/apply_w
 
 Verificar watermark:
 ```bash
-curl -X POST -F "file=@path/to/suspect_audio.wav" -F "features=1,2,3,4,5" http://localhost:5000/check_watermark
+curl -X POST -F "file=@path/to/suspect_audio.wav" \
+     -F "stft_features=[1,2,3,4,5]" \
+     -F "mellin_features=[6,7,8,9,10]" \
+     http://localhost:5000/check_watermark
 ```
