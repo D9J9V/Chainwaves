@@ -18,7 +18,7 @@ def apply_watermark() -> Union[Tuple[Response, int], Response]:
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
-
+    
     if file:
         input_path = os.path.join(UPLOAD_FOLDER, 'input.wav')
         output_path = os.path.join(UPLOAD_FOLDER, 'watermarked.wav')
@@ -36,21 +36,19 @@ def apply_watermark() -> Union[Tuple[Response, int], Response]:
 
 @app.route('/check_watermark', methods=['POST'])
 def check_watermark_route() -> Union[Tuple[Response, int], Response]:
-    if 'file' not in request.files or 'features' not in request.form:
+    if 'file' not in request.files or 'stft_features' not in request.form or 'mellin_features' not in request.form:
         return jsonify({'error': 'Missing file or features'}), 400
-
+    
     file = request.files['file']
-
     stft_features = np.array([int(f) for f in request.form['stft_features'].split(',')])
     mellin_features = np.array([int(f) for f in request.form['mellin_features'].split(',')])
     
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
-
+    
     if file:
         input_path = os.path.join(UPLOAD_FOLDER, 'check_input.wav')
         file.save(input_path)
-
         
         is_present, similarity = check_watermark(input_path, stft_features, mellin_features)
         
