@@ -9,27 +9,35 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def mellin_transform(audio, sample_rate, num_scales=100):
-    """Aplica una versión simplificada de la Transformada de Mellin."""
-    N = len(audio)
-    max_freq = min(sample_rate / 2, 22000)
-    scales = np.logspace(np.log10(20), np.log10(max_freq), num_scales)
-    mt = np.zeros(num_scales)
-    for i, scale in enumerate(scales):
-        stretched = interp1d(np.arange(N), audio, bounds_error=False, fill_value=0)(np.arange(N) * scale / N)
-        mt[i] = np.sum(np.abs(stretched))
-    logger.info(f"Transformada de Mellin aplicada. Rango de valores: [{mt.min():.2f}, {mt.max():.2f}]")
-    return mt
 
-def extract_mellin_features(audio, sample_rate, n_features=50):
-    """Extrae características usando la Transformada de Mellin."""
-    mt = mellin_transform(audio, sample_rate)
-    peaks, _ = find_peaks(mt, distance=5)
-    features = peaks[:n_features]
-    logger.info(f"Características de Mellin extraídas. Número de picos: {len(features)}")
-    return features
+def extract_stft_features(audio, sample_rate, n_features=100):
+    """Extrae características del audio usando STFT y detección de picos."""
+    f, t, Zxx = stft(audio, fs=sample_rate, nperseg=2048, noverlap=1536)
 
-def extract_stft_features(audio, sample_rate, n_features=50, nperseg=2048, noverlap=1024):
+    # Convert to magnitude spectrum
+    mag_spec = np.abs(Zxx)
+    normalize_spec = mag_spec / np.max(mag_spec)
+    
+    # Calculate the average magnitude across time
+    avg_mag = np.mean(normalize_spec, axis=1)
+
+    # Find peaks in the average magnitude spectrum
+    peaks, _ = find_peaks(avg_mag, height=np.max(avg_mag) * 0.08, distance=5)
+
+    # Sort peaks by magnitude and select top n_features
+    peak_mags = avg_mag[peaks]
+    top_peak_indices = np.argsort(peak_mags)[-n_features:][::-1]
+    top_peaks = peaks[top_peak_indices]
+
+    # Convert peak indices to frequencies
+    feature_freqs = f[top_peaks]
+
+    # Ensure we have exactly n_features
+    if len(feature_freqs) < n_features:
+        feature_freqs = np.pad(feature_freqs, (0, n_features - len(feature_freqs)), 'constant')
+
+    logger.info(f"Características STFT extraídas. Rango de frecuencias: [{feature_freqs.min():.2f}, {feature_freqs.max():.2f}] Hz")
+    return feature_freqs
     """Extrae características del audio usando STFT y detección de picos."""
     f, t, Zxx = stft(audio, fs=sample_rate, nperseg=nperseg, noverlap=noverlap)
     magnitude = np.abs(Zxx)
@@ -49,29 +57,65 @@ def save_audio(file_path, sample_rate, audio):
     """Guarda el audio en un archivo WAV."""
     sf.write(file_path, audio, sample_rate)
     logger.info(f"Audio guardado en {file_path}")
+    
+def mellin_transform(audio, sample_rate, num_scales=100):
+    """Aplica una versión simplificada de la Transformada de Mellin."""
+    N = len(audio)
+    # Definimos escalas logarítmicas entre 0.5 y 2
+    scales = np.logspace(np.log10(0.5), np.log10(2), num_scales)
+    mt = np.zeros(num_scales)
+    for i, scale in enumerate(scales):
+        stretched = interp1d(np.arange(N), audio, bounds_error=False, fill_value=0)(np.arange(N) * scale)
+        mt[i] = np.sum(np.abs(stretched))
+    return mt, scales
+
+def extract_mellin_features(audio, sample_rate, n_features=50):
+    """Extrae características usando la Transformada de Mellin."""
+    mt, scales = mellin_transform(audio, sample_rate)
+    peaks, _ = find_peaks(mt, distance=5)
+    
+    # Selecciona los n_features picos más prominentes
+    peak_magnitudes = mt[peaks]
+    top_peak_indices = np.argsort(peak_magnitudes)[-n_features:][::-1]
+    top_peaks = peaks[top_peak_indices]
+    
+    # Las características son las escalas correspondientes a estos picos
+    feature_scales = scales[top_peaks]
+    
+    logger.info(f"Características de Mellin extraídas. Rango de escalas: [{feature_scales.min():.2f}, {feature_scales.max():.2f}]")
+    return feature_scales
 
 def apply_watermark(audio, sample_rate, stft_features, mellin_features, strength=0.01):
     """Aplica un watermark al audio basado en las características STFT y Mellin."""
     f, t, Zxx = stft(audio, fs=sample_rate, nperseg=2048, noverlap=1536)
+    
+    # Aplicar watermark basado en STFT
     for freq in stft_features:
         idx = np.argmin(np.abs(f - freq))
         Zxx[idx, :] += strength * np.exp(1j * np.angle(Zxx[idx, :]))
+    
+    # Aplicar watermark basado en Mellin
     for scale in mellin_features:
-        stretched = interp1d(np.arange(len(audio)), audio, bounds_error=False, fill_value=0)(np.arange(len(audio)) * scale / len(audio))
+        stretched = interp1d(np.arange(len(audio)), audio, bounds_error=False, fill_value=0)(np.arange(len(audio)) * scale)
         Zxx += strength * stft(stretched, fs=sample_rate, nperseg=2048, noverlap=1536)[2]
+    
     _, watermarked = istft(Zxx, fs=sample_rate, nperseg=2048, noverlap=1536)
     return watermarked.astype(audio.dtype)
-
-def detect_watermark(audio, sample_rate, original_stft_features, original_mellin_features, threshold=0.8):
+      
+      
+def detect_watermark(audio, sample_rate, original_stft_features, original_mellin_features, threshold=0.6):
     """Detecta si el audio contiene el watermark usando tanto STFT como Mellin."""
     detected_stft = extract_stft_features(audio, sample_rate)
     detected_mellin = extract_mellin_features(audio, sample_rate)
     
-    stft_matches = np.intersect1d(original_stft_features, detected_stft)
-    mellin_matches = np.intersect1d(original_mellin_features, detected_mellin)
+    def are_close(a, b, tolerance=1e-5):
+        return np.abs(a - b) < tolerance
     
-    stft_similarity = len(stft_matches) / len(original_stft_features)
-    mellin_similarity = len(mellin_matches) / len(original_mellin_features)
+    stft_matches = sum(np.isclose(detected_stft, original_stft_features, atol=1))
+    mellin_matches = sum(any(are_close(detected, original) for detected in detected_mellin) for original in original_mellin_features)
+    
+    stft_similarity = stft_matches / len(original_stft_features)
+    mellin_similarity = mellin_matches / len(original_mellin_features)
     
     average_similarity = (stft_similarity + mellin_similarity) / 2
     
