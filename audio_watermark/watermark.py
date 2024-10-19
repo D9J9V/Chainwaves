@@ -111,4 +111,3 @@ if __name__ == "__main__":
 
     is_present, similarity = check_watermark(output_file, features)
     print(f"Watermark detectado: {is_present}, Similitud: {similarity:.2f}")
-

@@ -1,3 +1,5 @@
 numpy
 scipy
 flask
+librosa
+soundfile

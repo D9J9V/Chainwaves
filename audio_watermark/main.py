@@ -12,7 +12,7 @@ if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
 @app.route('/apply_watermark', methods=['POST'])
-def apply_watermark() -> Union[Tuple[Response, float], Response]:
+def apply_watermark():
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
     file = request.files['file']
@@ -22,9 +22,9 @@ def apply_watermark() -> Union[Tuple[Response, float], Response]:
     if file:
         input_path = os.path.join(UPLOAD_FOLDER, 'input.wav')
         output_path = os.path.join(UPLOAD_FOLDER, 'watermarked.wav')
-        file.save(input_path)
+        file.save(str(input_path))  # Convert to string here
 
-        features = create_watermark(input_path, output_path)
+        features = create_watermark(str(input_path), str(output_path))  # Convert to string here
 
         return jsonify({
             'message': 'Watermark applied successfully',
@@ -34,7 +34,7 @@ def apply_watermark() -> Union[Tuple[Response, float], Response]:
     return jsonify({'error': 'Unknown error'}), 500
 
 @app.route('/check_watermark', methods=['POST'])
-def check_watermark_route() -> Union[Tuple[Response, float], Response]:
+def check_watermark_route():
     if 'file' not in request.files or 'features' not in request.form:
         return jsonify({'error': 'Missing file or features'}), 400
 
@@ -46,7 +46,7 @@ def check_watermark_route() -> Union[Tuple[Response, float], Response]:
 
     if file:
         input_path = os.path.join(UPLOAD_FOLDER, 'check_input.wav')
-        file.save(input_path)
+        file.save(str(input_path))
 
         is_present, similarity = check_watermark(input_path, np.array(features))
 
@@ -58,12 +58,11 @@ def check_watermark_route() -> Union[Tuple[Response, float], Response]:
     return jsonify({'error': 'Unknown error'}), 500
 
 @app.route('/get_watermarked_file', methods=['GET'])
-def get_watermarked_file() -> Union[Response, Tuple[Response, float]]:
+def get_watermarked_file():
     output_path = os.path.join(UPLOAD_FOLDER, 'watermarked.wav')
-    if os.path.exists(output_path):
-        return send_file(output_path, as_attachment=True)
+    if os.path.exists(str(output_path)):  # Convert to string here
+        return send_file(str(output_path), as_attachment=True)  # Convert to string here
     else:
         return jsonify({'error': 'Watermarked file not found'}), 404
-
 if __name__ == '__main__':
     app.run(debug=True)
