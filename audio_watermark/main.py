@@ -18,37 +18,42 @@ def apply_watermark():
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
-
+    
     if file:
         input_path = os.path.join(UPLOAD_FOLDER, 'input.wav')
         output_path = os.path.join(UPLOAD_FOLDER, 'watermarked.wav')
+
         file.save(str(input_path))  # Convert to string here
 
         features = create_watermark(str(input_path), str(output_path))  # Convert to string here
-
         return jsonify({
             'message': 'Watermark applied successfully',
-            'features': features.tolist()
+            'stft_features': stft_features.tolist(),
+            'mellin_features': mellin_features.tolist()
         }), 200
 
     return jsonify({'error': 'Unknown error'}), 500
 
 @app.route('/check_watermark', methods=['POST'])
-def check_watermark_route():
-    if 'file' not in request.files or 'features' not in request.form:
+
+def check_watermark_route() -> Union[Tuple[Response, int], Response]:
+    if 'file' not in request.files or 'stft_features' not in request.form or 'mellin_features' not in request.form:
         return jsonify({'error': 'Missing file or features'}), 400
-
+    
     file = request.files['file']
-    features = [float(f) for f in request.form['features'].split(',')]
-
+    stft_features = np.array([int(f) for f in request.form['stft_features'].split(',')])
+    mellin_features = np.array([int(f) for f in request.form['mellin_features'].split(',')])
+    
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
-
+    
     if file:
         input_path = os.path.join(UPLOAD_FOLDER, 'check_input.wav')
-        file.save(str(input_path))
 
-        is_present, similarity = check_watermark(input_path, np.array(features))
+        file.save(input_path)
+        
+        is_present, similarity = check_watermark(input_path, stft_features, mellin_features)
+        
 
         return jsonify({
             'watermark_detected': is_present,
