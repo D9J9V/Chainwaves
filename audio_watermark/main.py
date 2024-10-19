@@ -24,11 +24,12 @@ def apply_watermark() -> Union[Tuple[Response, int], Response]:
         output_path = os.path.join(UPLOAD_FOLDER, 'watermarked.wav')
         file.save(input_path)
         
-        features = create_watermark(input_path, output_path)
+        stft_features, mellin_features = create_watermark(input_path, output_path)
         
         return jsonify({
             'message': 'Watermark applied successfully',
-            'features': features.tolist()
+            'stft_features': stft_features.tolist(),
+            'mellin_features': mellin_features.tolist()
         }), 200
 
     return jsonify({'error': 'Unknown error'}), 500
@@ -39,7 +40,8 @@ def check_watermark_route() -> Union[Tuple[Response, int], Response]:
         return jsonify({'error': 'Missing file or features'}), 400
     
     file = request.files['file']
-    features = [int(f) for f in request.form['features'].split(',')]
+    stft_features = np.array([int(f) for f in request.form['stft_features'].split(',')])
+    mellin_features = np.array([int(f) for f in request.form['mellin_features'].split(',')])
     
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
@@ -48,7 +50,7 @@ def check_watermark_route() -> Union[Tuple[Response, int], Response]:
         input_path = os.path.join(UPLOAD_FOLDER, 'check_input.wav')
         file.save(input_path)
         
-        is_present, similarity = check_watermark(input_path, np.array(features))
+        is_present, similarity = check_watermark(input_path, stft_features, mellin_features)
         
         return jsonify({
             'watermark_detected': is_present,
