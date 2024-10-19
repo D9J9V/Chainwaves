@@ -12,7 +12,7 @@ if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
 @app.route('/apply_watermark', methods=['POST'])
-def apply_watermark() -> Union[Tuple[Response, int], Response]:
+def apply_watermark() -> Union[Tuple[Response, float], Response]:
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
     file = request.files['file']
@@ -34,12 +34,12 @@ def apply_watermark() -> Union[Tuple[Response, int], Response]:
     return jsonify({'error': 'Unknown error'}), 500
 
 @app.route('/check_watermark', methods=['POST'])
-def check_watermark_route() -> Union[Tuple[Response, int], Response]:
+def check_watermark_route() -> Union[Tuple[Response, float], Response]:
     if 'file' not in request.files or 'features' not in request.form:
         return jsonify({'error': 'Missing file or features'}), 400
 
     file = request.files['file']
-    features = [int(f) for f in request.form['features'].split(',')]
+    features = [float(f) for f in request.form['features'].split(',')]
 
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
@@ -58,7 +58,7 @@ def check_watermark_route() -> Union[Tuple[Response, int], Response]:
     return jsonify({'error': 'Unknown error'}), 500
 
 @app.route('/get_watermarked_file', methods=['GET'])
-def get_watermarked_file() -> Union[Response, Tuple[Response, int]]:
+def get_watermarked_file() -> Union[Response, Tuple[Response, float]]:
     output_path = os.path.join(UPLOAD_FOLDER, 'watermarked.wav')
     if os.path.exists(output_path):
         return send_file(output_path, as_attachment=True)

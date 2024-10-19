@@ -28,6 +28,7 @@ def load_audio(file_path):
     # """Carga un archivo de audio usando librosa y lo convierte
     # a mono si es estéreo."""
     audio, sample_rate = librosa.load(file_path, sr=None, mono=True)
+    print(sample_rate)
     return sample_rate, audio
 
 
@@ -64,7 +65,7 @@ def extract_features(audio, sr, n_features=100):
     return feature_freqs
 
 
-def apply_watermark(audio, features, sr, strength=0.1):
+def apply_watermark(audio, features, sr, strength=0.01):
     """Aplica un watermark al audio basado en las características extraídas."""
     f, t, Zxx = stft(audio, fs=sr, nperseg=2048, noverlap=1536)
     for freq in features:
@@ -73,12 +74,14 @@ def apply_watermark(audio, features, sr, strength=0.1):
     _, watermarked = istft(Zxx, fs=sr, nperseg=2048, noverlap=1536)
     return watermarked.astype(audio.dtype)
 
+
 def detect_watermark(audio, sr, original_features, threshold=0.8):
     """Detecta si el audio contiene el watermark."""
     detected_features = extract_features(audio, sr)
     matches = np.sum(np.abs(detected_features[:, np.newaxis] - original_features) < 50)
     similarity = matches / len(original_features)
     return similarity > threshold, similarity
+
 
 # Funciones principales para usar en la API
 def create_watermark(input_file, output_file):
@@ -89,11 +92,13 @@ def create_watermark(input_file, output_file):
     save_audio(output_file, sample_rate, watermarked)
     return features
 
+
 def check_watermark(input_file, original_features):
     """Comprueba si el archivo de audio contiene el watermark."""
     sample_rate, audio = load_audio(input_file)
     is_present, similarity = detect_watermark(audio, sample_rate, original_features)
     return bool(is_present), float(similarity)
+
 
 if __name__ == "__main__":
     # Ejemplo de uso
