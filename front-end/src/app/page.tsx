@@ -114,7 +114,7 @@ export default function Main() {
     // Mint an NFT
     const tokenId = await mintNFT(
       wallet?.account.address ?? AddressZero,
-      `https://ipfs.io/ipfs/${nftIpfsHash}`
+      `https://ipfs.io/ipfs/${nftIpfsHash}`,
     );
     console.log(`NFT minted with tokenId ${tokenId}`);
 
@@ -135,15 +135,15 @@ export default function Main() {
       });
 
     console.log(
-      `Root IPA created at transaction hash ${registerIpResponse.txHash}, IPA ID: ${registerIpResponse.ipId}`
+      `Root IPA created at transaction hash ${registerIpResponse.txHash}, IPA ID: ${registerIpResponse.ipId}`,
     );
     console.log(
-      `View on the explorer: https://explorer.story.foundation/ipa/${registerIpResponse.ipId}`
+      `View on the explorer: https://explorer.story.foundation/ipa/${registerIpResponse.ipId}`,
     );
 
     const derivativeTokenId = await mintNFT(
       wallet?.account.address ?? AddressZero,
-      "test-uri"
+      "test-uri",
     );
     const registerIpDerivativeResponse: RegisterIpResponse =
       await client.ipAsset.register({
@@ -160,12 +160,14 @@ export default function Main() {
         txOptions: { waitForTransaction: true },
       });
     console.log(
-      `Derivative IPA created at transaction hash ${registerIpDerivativeResponse.txHash}, IPA ID: ${registerIpDerivativeResponse.ipId}`
+      `Derivative IPA created at transaction hash ${registerIpDerivativeResponse.txHash}, IPA ID: ${registerIpDerivativeResponse.ipId}`,
     );
 
     // 4. Make the Child IP Asset a Derivative of the Parent IP Asset
     //
     // Docs: https://docs.story.foundation/docs/spg-functions#register--derivative
+    {
+      /* 
     const linkDerivativeResponse: RegisterDerivativeResponse =
       await client.ipAsset.registerDerivative({
         childIpId: registerIpDerivativeResponse.ipId as Address,
@@ -175,8 +177,10 @@ export default function Main() {
         txOptions: { waitForTransaction: true },
       });
     console.log(
-      `Derivative linked at transaction hash ${linkDerivativeResponse.txHash}`
+      `Derivative linked at transaction hash ${linkDerivativeResponse.txHash}`,
     );
+    */
+    }
   };
 
   return (

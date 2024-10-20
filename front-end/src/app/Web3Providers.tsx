@@ -59,7 +59,7 @@ export default function Web3Providers({ children }: PropsWithChildren) {
     <DynamicContextProvider
       settings={{
         appName: "Story Documentation",
-        environmentId: "",
+        environmentId: "970fe4f4-f657-4b1a-afdc-52733e799fcf",
         walletConnectors: [EthereumWalletConnectors],
         overrides: { evmNetworks },
         networkValidationMode: "always",
@@ -67,9 +67,7 @@ export default function Web3Providers({ children }: PropsWithChildren) {
     >
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
-          <DynamicWagmiConnector>
-          {children}    
-          </DynamicWagmiConnector>
+          <DynamicWagmiConnector>{children}</DynamicWagmiConnector>
         </QueryClientProvider>
       </WagmiProvider>
     </DynamicContextProvider>
