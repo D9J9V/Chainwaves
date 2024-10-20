@@ -1,23 +1,31 @@
 "use client";
 
 import { useState } from "react";
+import { http, useContractWrite, useWalletClient } from "wagmi";
+import { DynamicWidget } from "../lib/dynamic";
+import { useIsLoggedIn } from "@dynamic-labs/sdk-react-core";
+import { uploadJSONToIPFS } from "../utils/uploadToIpfs";
+import { createHash } from "crypto";
+import { mintNFT } from "../utils/mintNFT";
+import {
+  AddressZero,
+  IpMetadata,
+  PIL_TYPE,
+  RegisterIpAndAttachPilTermsResponse,
+  StoryClient,
+  StoryConfig,
+} from "@story-protocol/core-sdk";
+import { NFTContractAddress } from "../utils/utils";
+import { Address, toHex, hexToBytes } from "viem";
+import { ShieldCheck, UploadIcon, Music } from "lucide-react";
+import Link from "next/link";
 
-export default function UploadPage() {
+export default function Main() {
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  const fetchWithTimeout = (
-    url: string,
-    options: RequestInit,
-    timeout: number,
-  ) => {
-    return Promise.race([
-      fetch(url, options),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Request timed out")), timeout),
-      ),
-    ]) as Promise<Response>;
-  };
+  const [watermarkedAudio, setWatermarkedAudio] = useState<string | null>(null);
+  const isLoggedIn = useIsLoggedIn();
+  const { data: wallet } = useWalletClient();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
@@ -37,14 +45,10 @@ export default function UploadPage() {
     formData.append("file", selectedFiles[0]);
 
     try {
-      const response = await fetchWithTimeout(
-        "http://localhost:5000/apply_watermark",
-        {
-          method: "POST",
-          body: formData,
-        },
-        300000, // 5 minutos de timeout
-      );
+      const response = await fetch("http://localhost:5000/apply_watermark", {
+        method: "POST",
+        body: formData,
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -53,130 +57,200 @@ export default function UploadPage() {
       const result = await response.json();
       console.log("Watermark applied successfully:", result);
 
-      const audioBlob = base64ToBlob(result.watermarked_audio, "audio/mpeg");
+      setWatermarkedAudio(result.watermarked_audio);
 
-      // Crear una URL para el Blob
-      const audioUrl = URL.createObjectURL(audioBlob);
-
-      const audioElement = new Audio(audioUrl);
-      audioElement.play();
-
-      // O crear un enlace de descarga:
-      const downloadLink = document.createElement("a");
-      downloadLink.href = audioUrl;
-      downloadLink.download = "watermarked_audio.mp3";
-      downloadLink.click();
-
-      const modal = document.getElementById("my_modal_1") as HTMLDialogElement;
-      if (modal) {
-        modal.showModal();
-      }
+      alert("Watermark applied successfully! You can now mint your NFT.");
     } catch (error) {
       console.error("Error applying watermark:", error);
-      if (error instanceof Error && error.message === "Request timed out") {
-        alert(
-          "The watermark process is taking longer than expected. Please try again or contact support.",
-        );
-      } else {
-        alert("There was an error applying the watermark. Please try again.");
-      }
+      alert("There was an error applying the watermark. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  function base64ToBlob(base64: string, mimeType: string): Blob {
-    const byteCharacters = atob(base64);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
+  const handleMintNFT = async () => {
+    if (!watermarkedAudio) {
+      alert("Please apply a watermark to your audio first.");
+      return;
     }
-    const byteArray = new Uint8Array(byteNumbers);
-    return new Blob([byteArray], { type: mimeType });
-  }
+
+    if (!wallet) {
+      alert("Wallet is not connected. Please connect your wallet.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const config: StoryConfig = {
+        wallet: wallet,
+        transport: http("https://testnet.storyrpc.io"),
+        chainId: "iliad",
+      };
+      const client = StoryClient.newClient(config);
+
+      const ipMetadata: IpMetadata = client.ipAsset.generateIpMetadata({
+        title: "Watermarked Audio",
+        description: "This is a watermarked audio file",
+        ipType: "Music",
+        media: [
+          {
+            name: "Watermarked Audio",
+            url: "https://turquoise-actual-rattlesnake-852.mypinata.cloud/ipfs/QmSKAuYBbkeKKHxBqq8sMNWggmyTxzC2adMzcHaZ5cwctn",
+            mimeType: "audio/mpeg",
+          },
+        ],
+        attributes: [
+          {
+            key: "Artist",
+            value: "Unknown",
+          },
+        ],
+        creators: [
+          {
+            name: "Creator",
+            address: wallet.account.address ?? AddressZero,
+            contributionPercent: 100,
+          },
+        ],
+      });
+
+      const ipIpfsHash = await uploadJSONToIPFS(ipMetadata);
+      const ipHash = createHash("sha256")
+        .update(JSON.stringify(ipMetadata))
+        .digest("hex");
+
+      const ipHashHex = ipHash.startsWith("0x")
+        ? ipHash
+        : `0x${ipHash.slice(0, 64)}`;
+
+      const tokenId = await mintNFT(
+        wallet.account.address ?? AddressZero,
+        `https://ipfs.io/ipfs/${ipIpfsHash}`,
+      );
+
+      if (!tokenId) {
+        throw new Error("Failed to mint NFT");
+      }
+
+      const registerIpResponse: RegisterIpAndAttachPilTermsResponse =
+        await client.ipAsset.registerIpAndAttachPilTerms({
+          nftContract: NFTContractAddress,
+          tokenId: tokenId,
+          pilType: PIL_TYPE.COMMERCIAL_USE,
+          mintingFee: 2,
+          currency: "0x91f6F05B08c16769d3c85867548615d270C42fC7",
+          ipMetadata: {
+            ipMetadataURI: `https://ipfs.io/ipfs/${ipIpfsHash}`,
+            ipMetadataHash: ipHashHex as `0x{ipIpfsHash} `,
+            nftMetadataHash: ipHashHex as `0x{ipIpfsHash} `,
+            nftMetadataURI: `https://ipfs.io/ipfs/${ipIpfsHash}`,
+          },
+          txOptions: { waitForTransaction: true },
+        });
+
+      console.log(
+        `NFT minted and registered with IP ID: ${registerIpResponse.ipId}`,
+      );
+      alert(
+        `NFT minted and registered successfully! IP ID: ${registerIpResponse.ipId}`,
+      );
+    } catch (error) {
+      console.error("Error minting NFT:", error);
+      alert("There was an error minting the NFT. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <div className="bg-gray-100 min-h-screen flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="">
-        <div className="max-w-7xl w-full space-y-8 grid grid-cols-2">
-          <div>
-            <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl md:text-6xl">
-              <span className="block text-indigo-600">Welcome to</span>
-              <span className="block">Chain Waves</span>
-            </h1>
-            <p className="mt-6 text-xl text-gray-500 max-w-3xl ">
-              Securely protect your audio creations on the blockchain.
-            </p>
-          </div>
-          <div className=" justify-center px-80">
-            <a
-              href=""
-              className="btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl justify-end px"
-            >
-              MINT
-            </a>
-          </div>
+    <div className="min-h-screen bg-white text-black flex flex-col">
+      <header className="bg-cyan-300 p-6 border-b-2 border-black">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-4xl font-bold">
+            Audio Watermarking & NFT Minting
+          </h1>
+          <nav>
+            <ul className="flex space-x-4">
+              <li>
+                <Link href="/upload">
+                  <Link
+                    href="/upload"
+                    className="px-4 py-2 bg-yellow-300 border-2 border-black rounded font-bold hover:bg-yellow-400 transition-colors"
+                  >
+                    Mint and secure
+                  </Link>
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/upload"
+                  className="px-4 py-2 bg-yellow-300 border-2 border-black rounded font-bold hover:bg-yellow-400 transition-colors"
+                >
+                  Dispute
+                </Link>
+              </li>
+            </ul>
+          </nav>
         </div>
+        <p className="text-xl mt-2">Protect your IP before publishing</p>
+      </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white rounded-lg shadow-md p-8 flex flex-col items-center">
-            <label
-              htmlFor="audio-files"
-              className="block text-lg font-medium text-gray-700 mb-4"
-            >
-              Upload your audio files
-            </label>
-            <input
-              type="file"
-              className="file-input file-input-bordered w-full max-w-xs"
-              onChange={handleFileChange}
-              multiple
-            />
-            {selectedFiles && (
-              <div className="mt-4">
-                <h3 className="text-lg font-medium text-gray-700 mb-2">
-                  Selected Files:
-                </h3>
-                <ul className="list-disc list-inside">
-                  {Array.from(selectedFiles || []).map((file, index) => (
-                    <li key={index}>{file.name}</li>
-                  ))}
-                </ul>
+      <main className="flex-grow p-6 space-y-8">
+        {isLoggedIn ? (
+          <section className="border-2 border-black p-6 rounded-md shadow-[8px_8px_0px_rgba(0,0,0,1)] bg-yellow-200">
+            <h2 className="text-2xl font-bold mb-4">Upload Your Audio</h2>
+            <div className="space-y-4">
+              <div className="border-2 border-black p-4 rounded-md bg-white">
+                <input
+                  type="file"
+                  onChange={handleFileChange}
+                  className="w-full"
+                  accept="audio/*"
+                />
               </div>
-            )}
-          </div>
-          <div className="bg-white rounded-lg shadow-md p-8 flex flex-col items-center justify-center">
-            <h2 className="text-2xl font-bold text-gray-900 text-center mb-4">
-              Protect Your Audio with a Watermark
-            </h2>
-            <p className="text-gray-600 text-center mb-6">
-              Add an invisible watermark to your audio file to secure your
-              intellectual property and track its usage.
+              <button
+                onClick={handleProtectAudio}
+                disabled={isLoading || !selectedFiles}
+                className="w-full p-3 bg-cyan-300 border-2 border-black rounded font-bold hover:bg-cyan-400 transition-colors flex items-center justify-center disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <span className="animate-spin mr-2">
+                    <UploadIcon size={20} />
+                  </span>
+                ) : (
+                  <ShieldCheck size={20} className="mr-2" />
+                )}
+                {isLoading ? "Processing..." : "Apply Watermark"}
+              </button>
+              <button
+                onClick={handleMintNFT}
+                disabled={isLoading || !watermarkedAudio}
+                className="w-full p-3 bg-lime-300 border-2 border-black rounded font-bold hover:bg-lime-400 transition-colors flex items-center justify-center disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <span className="animate-spin mr-2">
+                    <UploadIcon size={20} />
+                  </span>
+                ) : (
+                  <Music size={20} className="mr-2" />
+                )}
+                {isLoading ? "Processing..." : "Mint NFT"}
+              </button>
+            </div>
+          </section>
+        ) : (
+          <section className="border-2 border-black p-6 rounded-md shadow-[8px_8px_0px_rgba(0,0,0,1)] bg-red-200">
+            <p className="text-xl font-bold text-red-600">
+              Please log in to continue.
             </p>
+          </section>
+        )}
+      </main>
 
-            <button
-              className="btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl"
-              onClick={handleProtectAudio}
-              disabled={isLoading || !selectedFiles}
-            >
-              {isLoading ? "Processing..." : "Protect my audio"}
-            </button>
-            <dialog id="my_modal_1" className="modal">
-              <div className="modal-box">
-                <h3 className="font-bold text-lg">Congrats!</h3>
-                <p className="py-4">
-                  Your watermarked file downloaded successfully
-                </p>
-                <div className="modal-action">
-                  <form method="dialog">
-                    <button className="btn btn-primary">Close</button>
-                  </form>
-                </div>
-              </div>
-            </dialog>
-          </div>
-        </div>
-      </div>
+      <footer className="bg-cyan-300 p-6 border-t-2 border-black">
+        <DynamicWidget />
+      </footer>
     </div>
   );
 }
