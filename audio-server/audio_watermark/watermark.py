@@ -24,7 +24,7 @@ def extract_stft_features(audio, sample_rate, n_features=100):
     avg_mag = np.mean(normalize_spec, axis=1)
 
     # Find peaks in the average magnitude spectrum
-    peaks, _ = find_peaks(avg_mag, height=np.max(avg_mag) * 0.05, threshold=np.max(avg_mag)*0.1, distance=1)
+    peaks, _ = find_peaks(avg_mag, height=np.max(avg_mag) * 0.05, threshold=np.max(avg_mag)*0.08, distance=1)
 
     # Sort peaks by magnitude and select top n_features
     peak_mags = avg_mag[peaks]
