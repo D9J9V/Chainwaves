@@ -76,16 +76,26 @@ def extract_mellin_features(audio, sample_rate, n_features=50):
     mt, scales = mellin_transform(audio, sample_rate)
     peaks, _ = find_peaks(mt, distance=5)
 
+    if len(peaks) == 0:
+        top_indices = np.argsort(mt)[-n_features:]
+        feature_scales = scales[top_indices]
+    else:
     # Selecciona los n_features picos más prominentes
-    peak_magnitudes = mt[peaks]
-    top_peak_indices = np.argsort(peak_magnitudes)[-n_features:][::-1]
-    top_peaks = peaks[top_peak_indices]
+        peak_magnitudes = mt[peaks]
+        top_peak_indices = np.argsort(peak_magnitudes)[-n_features:][::-1]
+        top_peaks = peaks[top_peak_indices]
+        feature_scales = scales[top_peaks]
+
+    if len(feature_scales) < n_features:
+        feature_scales = np.pad(feature_scales, (0, n_features - len(feature_scales)), 'edge')
+    elif len(feature_scales) > n_features:
+        feature_scales = feature_scales[:n_features]
 
     # Las características son las escalas correspondientes a estos picos
-    feature_scales = scales[top_peaks]
 
     logger.info(f"Características de Mellin extraídas. Rango de escalas: [{feature_scales.min():.2f}, {feature_scales.max():.2f}]")
     return feature_scales
+
 
 def apply_watermark(audio, sample_rate, stft_features, mellin_features, strength=0.01):
     """Aplica un watermark al audio basado en las características STFT y Mellin."""
