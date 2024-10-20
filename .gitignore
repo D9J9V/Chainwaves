@@ -4,3 +4,7 @@
 /audio_watermark/__pycache__/
 /wav_files
 /audio-server/audio_watermark/sounds
+
+.env
+/front-end/node_modules
+/front-end/.next
