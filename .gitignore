@@ -1,10 +1,7 @@
 /venv/*
-/audio_watermark/temp_files/
-/audio_watermark/venv/*
-/audio_watermark/__pycache__/
-/wav_files
-/audio-server/audio_watermark/sounds
-
+/audio-watermark-server/temp_files/
+/audio-watermark-server/venv/*
+/audio-watermark-server/__pycache__/
 .env
 /front-end/node_modules
 /front-end/.next

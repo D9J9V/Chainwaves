@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, send_file
 import os
 import json
+import base64
 from watermark import create_watermark, check_watermark
 import numpy as np
 import logging
@@ -23,16 +24,25 @@ def apply_watermark():
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
-    
+
     if file:
-        input_path = os.path.join(UPLOAD_FOLDER, 'input.wav')
-        output_path = os.path.join(UPLOAD_FOLDER, 'watermarked.wav')
+        input_path = os.path.join(UPLOAD_FOLDER, 'input.mp3')
+        output_path = os.path.join(UPLOAD_FOLDER, 'watermarked.mp3')
         file.save(input_path)
-        
+
         try:
             stft_features, mellin_features = create_watermark(input_path, output_path)
+
+            # Leer el archivo de audio watermarked
+            with open(output_path, 'rb') as f:
+                watermarked_audio = f.read()
+            
+            # Codificar en base64
+            watermarked_audio_b64 = base64.b64encode(watermarked_audio).decode('utf-8')
+
             return jsonify({
                 'message': 'Watermark applied successfully',
+                'watermarked_audio': watermarked_audio_b64,
                 'stft_features': stft_features.tolist(),
                 'mellin_features': mellin_features.tolist()
             }), 200

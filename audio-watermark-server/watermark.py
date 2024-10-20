@@ -10,6 +10,26 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def load_audio(file_path):
+    """Carga un archivo de audio en formato MP3 usando pydub y lo convierte a numpy array."""
+    audio = AudioSegment.from_file(file_path, format='mp3')
+    samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
+    samples /= 32768.0  # Normalizar
+    sample_rate = audio.frame_rate
+    logger.info(f"Audio cargado. Tasa de muestreo: {sample_rate} Hz, Duración: {len(samples) / sample_rate:.2f} segundos")
+    return sample_rate, samples
+
+def save_audio(file_path, sample_rate, audio):
+    """Guarda el audio como archivo MP3 usando pydub."""
+    samples = (audio * 32768).astype(np.int16)
+    audio_segment = AudioSegment(
+        samples.tobytes(),
+        frame_rate=sample_rate,
+        sample_width=samples.dtype.itemsize,
+        channels=1
+    )
+    audio_segment.export(file_path, format='mp3')
+    logger.info(f"Audio guardado en {file_path}")
 
 def extract_stft_features(audio, sample_rate, n_features=100):
     """Extrae características del audio usando STFT y detección de picos."""
@@ -49,29 +69,6 @@ def extract_stft_features(audio, sample_rate, n_features=100):
     top_peaks = unique_peaks[np.argsort(counts)[-n_features:]]
     logger.info(f"Características STFT extraídas. Rango de frecuencias: [{f[top_peaks.min()]:.2f}, {f[top_peaks.max()]:.2f}] Hz")
     return top_peaks
-
-def load_audio(file_path):
-    """Carga un archivo de audio usando pydub y lo convierte a numpy array"""
-    audio = AudioSegment.from_file(file_path)
-    samples = np.array(audio.get_array_of_samples())
-    # Convert to float32 for processing, normalizando a [-1.0, 1.0]
-    samples = samples.astype(np.float32) / (2**15)
-    sample_rate = audio.frame_rate
-    logger.info(f"Audio cargado. Tasa de muestreo: {sample_rate} Hz, Duración: {len(samples)/sample_rate:.2f} segundos")
-    return sample_rate, samples
-
-def save_audio(file_path, sample_rate, audio):
-    """Guarda el audio en un archivo MP3 usando pydub"""
-    # Desnormalizar el audio
-    audio = (audio * (2**15)).astype(np.int16)
-    audio_segment = AudioSegment(
-        audio.tobytes(), 
-        frame_rate=sample_rate,
-        sample_width=audio.dtype.itemsize, 
-        channels=1
-    )
-    audio_segment.export(file_path, format="mp3")
-    logger.info(f"Audio guardado en {file_path}")
 
 def mellin_transform(audio, sample_rate, num_scales=100):
     """Aplica una versión simplificada de la Transformada de Mellin."""
