@@ -1,3 +1,4 @@
+from pydub import AudioSegment
 import numpy as np
 from scipy.io import wavfile
 from scipy.signal import find_peaks, stft, istft
@@ -50,14 +51,26 @@ def extract_stft_features(audio, sample_rate, n_features=100):
     return top_peaks
 
 def load_audio(file_path):
-    """Carga un archivo de audio usando librosa y lo convierte a mono si es estéreo."""
-    audio, sample_rate = librosa.load(file_path, sr=None, mono=True)
-    logger.info(f"Audio cargado. Tasa de muestreo: {sample_rate} Hz, Duración: {len(audio)/sample_rate:.2f} segundos")
-    return sample_rate, audio
+    """Carga un archivo de audio usando pydub y lo convierte a numpy array"""
+    audio = AudioSegment.from_file(file_path)
+    samples = np.array(audio.get_array_of_samples())
+    # Convert to float32 for processing, normalizando a [-1.0, 1.0]
+    samples = samples.astype(np.float32) / (2**15)
+    sample_rate = audio.frame_rate
+    logger.info(f"Audio cargado. Tasa de muestreo: {sample_rate} Hz, Duración: {len(samples)/sample_rate:.2f} segundos")
+    return sample_rate, samples
 
 def save_audio(file_path, sample_rate, audio):
-    """Guarda el audio en un archivo WAV."""
-    sf.write(file_path, audio, sample_rate)
+    """Guarda el audio en un archivo MP3 usando pydub"""
+    # Desnormalizar el audio
+    audio = (audio * (2**15)).astype(np.int16)
+    audio_segment = AudioSegment(
+        audio.tobytes(), 
+        frame_rate=sample_rate,
+        sample_width=audio.dtype.itemsize, 
+        channels=1
+    )
+    audio_segment.export(file_path, format="mp3")
     logger.info(f"Audio guardado en {file_path}")
 
 def mellin_transform(audio, sample_rate, num_scales=100):
