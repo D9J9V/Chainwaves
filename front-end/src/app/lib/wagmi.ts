@@ -1,5 +1,6 @@
 import { http, createConfig } from "wagmi";
-import { mainnet } from "wagmi/chains";
+
+import { Chain } from "wagmi/chains";
 
 export const iliad = {
   id: 1513, // Your custom chain ID
