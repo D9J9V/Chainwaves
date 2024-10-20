@@ -2,3 +2,5 @@
 /audio_watermark/temp_files/
 /audio_watermark/venv/*
 /audio_watermark/__pycache__/
+/wav_files
+/audio-server/audio_watermark/sounds
